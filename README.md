@@ -1,8 +1,8 @@
 # GlitrAI Mini Content Engine
 
-Initial backend foundation for the GlitrAI SDE Intern assignment. It accepts
-product details and an image, persists a pending generation job in PostgreSQL,
-and exposes endpoints for health and job status.
+Content-generation service for the GlitrAI SDE Intern assignment. It accepts
+product details and an image, creates a photography prompt, produces a polished
+mock preview, and persists the complete asynchronous job lifecycle.
 
 ## Stack
 
@@ -10,6 +10,8 @@ and exposes endpoints for health and job status.
 - SQLAlchemy 2
 - PostgreSQL via psycopg
 - Pydantic Settings
+- Google Gen AI SDK with a deterministic offline fallback
+- Pillow mock image generation
 - Pytest
 
 ## Local setup
@@ -31,6 +33,7 @@ A production service should use migrations such as Alembic.
   as multipart form data and returns a pending job with HTTP 202.
 - `GET /jobs` returns up to 100 recent jobs, newest first.
 - `GET /jobs/{id}` returns a job and its result URL when completed.
+- `GET /jobs/{id}/image` streams the completed PNG from the database.
 
 Accepted image formats are PNG, JPEG, and WebP. Uploads are limited to 5 MB by
 default.
@@ -40,7 +43,12 @@ default.
 Run `pytest`. Tests use an isolated in-memory SQLite database, while the
 application itself is configured for PostgreSQL.
 
-## Current scope
+## Generation workflow
 
-Prompt generation, image generation, background processing, the result-image
-endpoint, and the full frontend are intentionally deferred to the next stage.
+`POST /generate` persists a pending job and schedules processing with FastAPI
+`BackgroundTasks`. Processing moves the job to `processing`, generates a prompt
+with Gemini (or the deterministic fallback), renders a 1024×1024 PNG, and marks
+the job `completed`. Errors are stored and mark the job `failed`.
+
+`BackgroundTasks` keeps this assignment compact. A production deployment should
+use a durable queue and worker so jobs survive application restarts.

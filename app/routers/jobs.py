@@ -1,6 +1,17 @@
 import uuid
+from io import BytesIO
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,6 +19,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import Job, JobStatus
 from app.schemas import JobCreated, JobResponse
+from app.services.job_service import process_job
 
 router = APIRouter(tags=["jobs"])
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
@@ -32,6 +44,7 @@ def to_response(job: Job) -> JobResponse:
     "/generate", response_model=JobCreated, status_code=status.HTTP_202_ACCEPTED
 )
 async def generate(
+    background_tasks: BackgroundTasks,
     product_name: str = Form(...),
     description: str = Form(...),
     product_image: UploadFile = File(...),
@@ -68,7 +81,9 @@ async def generate(
     db.add(job)
     db.commit()
     db.refresh(job)
-    return JobCreated(id=job.id, status=job.status)
+    response = JobCreated(id=job.id, status=job.status)
+    background_tasks.add_task(process_job, job.id)
+    return response
 
 
 @router.get("/jobs", response_model=list[JobResponse])
@@ -83,3 +98,23 @@ def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)) -> JobResponse:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return to_response(job)
+
+
+@router.get("/jobs/{job_id}/image", response_class=StreamingResponse)
+def get_job_image(
+    job_id: uuid.UUID, db: Session = Depends(get_db)
+) -> StreamingResponse:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if (
+        job.status != JobStatus.completed
+        or job.result_image is None
+        or job.result_image_mime is None
+    ):
+        raise HTTPException(status_code=409, detail="Job image is not available")
+    return StreamingResponse(
+        BytesIO(job.result_image),
+        media_type=job.result_image_mime,
+        headers={"Content-Disposition": f'inline; filename="{job.id}.png"'},
+    )
