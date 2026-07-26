@@ -98,13 +98,56 @@ def test_prompt_logging_contains_only_safe_structured_fields(caplog):
         ),
     )
 
-    with caplog.at_level(logging.INFO, logger="app.services.prompt_service"):
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
         service.generate(product, "Private description", job_id=job_id)
 
     events = [json.loads(record.message) for record in caplog.records]
     assert events == [
-        {"provider": "gemini", "category": "failure", "job_id": str(job_id)},
-        {"provider": "fallback", "category": "success", "job_id": str(job_id)},
+        {
+            "event": "prompt_generation",
+            "provider": "gemini",
+            "status": "failure",
+            "job_id": str(job_id),
+            "error_type": "TimeoutError",
+            "error_description": "Gemini request failed; using fallback.",
+        },
+        {
+            "event": "prompt_generation",
+            "provider": "fallback",
+            "status": "success",
+            "job_id": str(job_id),
+        },
     ]
     assert secret not in caplog.text
     assert product not in caplog.text
+
+
+def test_gemini_success_event_is_logged(caplog):
+    job_id = uuid.uuid4()
+    client = SimpleNamespace(
+        models=SimpleNamespace(
+            generate_content=lambda **_: SimpleNamespace(
+                text="A private generated prompt that must not be logged."
+            )
+        )
+    )
+    service = PromptService(
+        settings=Settings(
+            database_url="sqlite+pysqlite:///:memory:",
+            gemini_api_key="private-key",
+        ),
+        client=client,
+    )
+
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        service.generate("Private product", "Private description", job_id=job_id)
+
+    event = json.loads(caplog.records[-1].message)
+    assert event == {
+        "event": "prompt_generation",
+        "provider": "gemini",
+        "status": "success",
+        "job_id": str(job_id),
+    }
+    assert "private-key" not in caplog.text
+    assert "private generated prompt" not in caplog.text

@@ -7,7 +7,9 @@ from google.genai import types
 
 from app.config import Settings, get_settings
 
-logger = logging.getLogger(__name__)
+# Uvicorn configures this logger for deployed application output, including
+# Render's captured stdout/stderr stream.
+logger = logging.getLogger("uvicorn.error")
 
 
 class PromptService:
@@ -43,10 +45,16 @@ class PromptService:
                 raise ValueError("Gemini returned an empty prompt")
             self._log_provider("gemini", job_id, "success")
             return prompt
-        except Exception:
+        except Exception as exc:
             # Prompt generation must remain available when the external provider
             # is unavailable. Provider details are deliberately not exposed.
-            self._log_provider("gemini", job_id, "failure")
+            self._log_provider(
+                "gemini",
+                job_id,
+                "failure",
+                error_type=type(exc).__name__,
+                error_description="Gemini request failed; using fallback.",
+            )
             self._log_provider("fallback", job_id, "success")
             return self.fallback_prompt(product_name, description)
 
@@ -54,11 +62,21 @@ class PromptService:
     def _log_provider(
         provider: str,
         job_id: uuid.UUID | str | None,
-        category: str,
+        status: str,
+        *,
+        error_type: str | None = None,
+        error_description: str | None = None,
     ) -> None:
-        event = {"provider": provider, "category": category}
-        if job_id is not None:
-            event["job_id"] = str(job_id)
+        event = {
+            "event": "prompt_generation",
+            "provider": provider,
+            "status": status,
+            "job_id": str(job_id) if job_id is not None else None,
+        }
+        if error_type is not None:
+            event["error_type"] = error_type
+        if error_description is not None:
+            event["error_description"] = error_description
         logger.info(json.dumps(event, separators=(",", ":")))
 
     @staticmethod
