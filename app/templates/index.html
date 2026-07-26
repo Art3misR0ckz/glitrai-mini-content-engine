@@ -1,5 +1,122 @@
 <!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>Mini Content Engine</title></head>
-  <body><h1>Mini Content Engine</h1></body>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Turn product information into polished creative previews.">
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+  </head>
+  <body data-max-upload-mb="{{ max_upload_mb }}">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="{{ app_name }} home">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span>
+          <strong>GlitrAI</strong>
+          <small>Mini Content Engine</small>
+        </span>
+      </a>
+      <a class="api-link" href="/docs">API docs <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero">
+        <p class="eyebrow">Creative generation workspace</p>
+        <h1>Turn product details into a polished visual.</h1>
+        <p>Upload a reference image, describe the product, and follow its generation job from prompt to preview.</p>
+      </section>
+
+      <div class="dashboard-grid">
+        <section class="panel composer" aria-labelledby="composer-title">
+          <div class="panel-heading">
+            <div>
+              <p class="step-label">New generation</p>
+              <h2 id="composer-title">Product details</h2>
+            </div>
+            <span class="step-number">01</span>
+          </div>
+
+          <form id="generation-form" novalidate>
+            <div class="field">
+              <label for="product-name">Product name</label>
+              <input id="product-name" name="product_name" type="text" maxlength="255"
+                     placeholder="e.g. Florentine Wooden Salad Bowl" autocomplete="off" required>
+              <p class="field-error" id="product-name-error"></p>
+            </div>
+
+            <div class="field">
+              <label for="description">Short description</label>
+              <textarea id="description" name="description" rows="4"
+                        placeholder="Describe its material, finish, colours, and intended use." required></textarea>
+              <p class="field-error" id="description-error"></p>
+            </div>
+
+            <div class="field">
+              <label>Product image</label>
+              <label class="upload-zone" id="upload-zone" for="product-image">
+                <input id="product-image" name="product_image" type="file"
+                       accept="image/png,image/jpeg,image/webp" required>
+                <span class="upload-icon" aria-hidden="true">↑</span>
+                <span class="upload-copy">
+                  <strong>Choose a product image</strong>
+                  <small>PNG, JPEG or WebP · up to {{ max_upload_mb }} MB</small>
+                </span>
+              </label>
+              <div class="image-preview" id="image-preview" hidden>
+                <img id="preview-image" alt="Selected product preview">
+                <div>
+                  <strong id="preview-name"></strong>
+                  <button type="button" class="text-button" id="remove-image">Remove</button>
+                </div>
+              </div>
+              <p class="field-error" id="product-image-error"></p>
+            </div>
+
+            <div id="form-notice" class="notice" role="status" aria-live="polite" hidden></div>
+            <button class="primary-button" id="generate-button" type="submit">
+              <span class="button-label">Generate preview</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+          </form>
+        </section>
+
+        <section class="jobs-section" aria-labelledby="jobs-title">
+          <div class="jobs-heading">
+            <div>
+              <p class="step-label">Generation history</p>
+              <h2 id="jobs-title">Recent jobs</h2>
+            </div>
+            <div class="live-indicator"><span></span> Live updates</div>
+          </div>
+
+          <div id="jobs-loading" class="empty-state">
+            <span class="loader-ring" aria-hidden="true"></span>
+            <p>Loading recent jobs…</p>
+          </div>
+          <div id="jobs-empty" class="empty-state" hidden>
+            <span class="empty-icon" aria-hidden="true">◇</span>
+            <h3>No generations yet</h3>
+            <p>Your submitted products will appear here.</p>
+          </div>
+          <div id="jobs-error" class="jobs-error" role="alert" hidden></div>
+          <div id="jobs-list" class="jobs-list" aria-live="polite"></div>
+        </section>
+      </div>
+    </main>
+
+    <dialog id="result-modal" class="result-modal">
+      <div class="modal-header">
+        <div>
+          <p class="step-label">Generated preview</p>
+          <h2 id="modal-title">Result</h2>
+        </div>
+        <button class="close-button" id="close-modal" type="button" aria-label="Close result">×</button>
+      </div>
+      <img id="modal-image" alt="Generated product preview">
+      <a id="modal-open-full" class="primary-button link-button" target="_blank" rel="noopener">
+        Open full image <span aria-hidden="true">↗</span>
+      </a>
+    </dialog>
+  </body>
 </html>

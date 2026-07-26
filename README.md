@@ -21,7 +21,11 @@ mock preview, and persists the complete asynchronous job lifecycle.
 3. Copy `.env.example` to `.env` and update `DATABASE_URL`.
 4. Create the configured PostgreSQL database.
 5. Start the API with `uvicorn app.main:app --reload`.
-6. Open `http://127.0.0.1:8000/docs`.
+6. Open `http://127.0.0.1:8000` for the dashboard.
+
+The frontend and API are served by the same FastAPI application, so no Node.js
+installation or separate frontend process is required. API documentation
+remains available at `http://127.0.0.1:8000/docs`.
 
 Tables are created during application startup for this assignment foundation.
 A production service should use migrations such as Alembic.
@@ -37,6 +41,23 @@ A production service should use migrations such as Alembic.
 
 Accepted image formats are PNG, JPEG, and WebP. Uploads are limited to 5 MB by
 default.
+
+## Frontend
+
+The responsive dashboard provides:
+
+- A product name, description, and reference-image submission form.
+- Local image preview and client-side type and size validation.
+- Clear upload, success, and error states.
+- Recent job cards refreshed every three seconds.
+- Status badges for pending, processing, completed, and failed jobs.
+- Generated prompt inspection and inline or full-size result viewing.
+
+### Screenshot
+
+> Add a screenshot of the deployed dashboard here before submission.
+
+<!-- Example: ![Mini Content Engine dashboard](docs/dashboard.png) -->
 
 ## Tests
 
