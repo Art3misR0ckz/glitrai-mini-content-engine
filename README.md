@@ -115,6 +115,8 @@ they work independently of Render's process working directory.
 - `GET /jobs/{id}` exposes status, prompt, safe error details, and a result URL
   only after completion.
 - `GET /jobs/{id}/image` streams stored result bytes.
+- `DELETE /jobs/{id}` permanently removes a completed job and its stored image;
+  pending, processing, and failed jobs are protected.
 - `GET /health` checks the real database connection.
 
 ## Job lifecycle
@@ -132,6 +134,7 @@ state transitions and rolls back before recording a sanitized failure.
 The server-rendered dashboard provides local image preview, client-side
 validation, readable submission states, three-second status polling, generated
 prompt inspection, status badges, inline results, and full-image viewing. It
+also provides a confirmation-protected Delete action for completed jobs. It
 requires no Node.js build or separate deployment.
 
 ### Screenshot

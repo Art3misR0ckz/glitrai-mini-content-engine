@@ -9,6 +9,7 @@ from fastapi import (
     Form,
     HTTPException,
     UploadFile,
+    Response,
     status,
 )
 from fastapi.responses import StreamingResponse
@@ -112,6 +113,28 @@ def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)) -> JobResponse:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return to_response(job)
+
+
+@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_completed_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db)
+) -> Response:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != JobStatus.completed:
+        raise HTTPException(
+            status_code=409, detail="Only completed jobs can be deleted"
+        )
+    try:
+        db.delete(job)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503, detail="Unable to delete the completed job"
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/jobs/{job_id}/image", response_class=StreamingResponse)

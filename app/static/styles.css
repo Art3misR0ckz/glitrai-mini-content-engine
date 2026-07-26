@@ -350,6 +350,18 @@ input.invalid, textarea.invalid, .upload-zone.invalid { border-color: var(--fail
 .job-result { margin: 18px -22px -22px; border-top: 1px solid var(--line); background: #f4f4f0; }
 .job-result > img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .result-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; }
+.result-links { display: flex; align-items: center; gap: 15px; }
+.delete-button {
+  padding: 0;
+  border: 0;
+  color: var(--failed);
+  background: transparent;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 750;
+}
+.delete-button:hover { text-decoration: underline; }
+.delete-button:disabled { cursor: wait; opacity: .6; }
 
 .empty-state {
   display: grid;
@@ -403,5 +415,6 @@ input.invalid, textarea.invalid, .upload-zone.invalid { border-color: var(--fail
   .result-actions { align-items: stretch; flex-direction: column; }
   .result-actions .secondary-button { width: 100%; }
   .text-link { text-align: center; }
+  .result-links { justify-content: center; }
   .live-indicator { display: none; }
 }

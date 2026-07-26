@@ -1,7 +1,13 @@
+import json
+import logging
+import uuid
+
 from google import genai
 from google.genai import types
 
 from app.config import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class PromptService:
@@ -13,8 +19,14 @@ class PromptService:
         self.settings = settings or get_settings()
         self._client = client
 
-    def generate(self, product_name: str, description: str) -> str:
+    def generate(
+        self,
+        product_name: str,
+        description: str,
+        job_id: uuid.UUID | str | None = None,
+    ) -> str:
         if not self.settings.gemini_api_key:
+            self._log_provider("fallback", job_id, "success")
             return self.fallback_prompt(product_name, description)
 
         try:
@@ -29,11 +41,25 @@ class PromptService:
             prompt = (response.text or "").strip()
             if not prompt:
                 raise ValueError("Gemini returned an empty prompt")
+            self._log_provider("gemini", job_id, "success")
             return prompt
         except Exception:
             # Prompt generation must remain available when the external provider
             # is unavailable. Provider details are deliberately not exposed.
+            self._log_provider("gemini", job_id, "failure")
+            self._log_provider("fallback", job_id, "success")
             return self.fallback_prompt(product_name, description)
+
+    @staticmethod
+    def _log_provider(
+        provider: str,
+        job_id: uuid.UUID | str | None,
+        category: str,
+    ) -> None:
+        event = {"provider": provider, "category": category}
+        if job_id is not None:
+            event["job_id"] = str(job_id)
+        logger.info(json.dumps(event, separators=(",", ":")))
 
     @staticmethod
     def _request(product_name: str, description: str) -> str:

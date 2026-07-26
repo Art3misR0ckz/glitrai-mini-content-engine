@@ -23,7 +23,9 @@ def process_job(
             job.error_message = None
             db.commit()
 
-            prompt = prompt_service.generate(job.product_name, job.description)
+            prompt = prompt_service.generate(
+                job.product_name, job.description, job_id=job.id
+            )
             result = image_generator.generate(
                 prompt, job.input_image, job.product_name
             )

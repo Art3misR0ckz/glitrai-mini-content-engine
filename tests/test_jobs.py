@@ -130,3 +130,24 @@ def test_rejects_mismatched_image_type(client):
 
     assert response.status_code == 422
     assert "do not match" in response.json()["detail"]
+
+
+def test_completed_job_can_be_deleted(client):
+    created = client.post("/generate", **valid_form())
+    job_id = created.json()["id"]
+
+    deleted = client.delete(f"/jobs/{job_id}")
+
+    assert deleted.status_code == 204
+    assert client.get(f"/jobs/{job_id}").status_code == 404
+    assert client.get(f"/jobs/{job_id}/image").status_code == 404
+
+
+def test_unfinished_job_cannot_be_deleted(client, monkeypatch):
+    monkeypatch.setattr("app.routers.jobs.process_job", lambda _job_id: None)
+    created = client.post("/generate", **valid_form())
+
+    deleted = client.delete(f"/jobs/{created.json()['id']}")
+
+    assert deleted.status_code == 409
+    assert deleted.json()["detail"] == "Only completed jobs can be deleted"

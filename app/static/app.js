@@ -174,7 +174,12 @@
             <button class="secondary-button view-result" type="button"
                     data-url="${escapeHtml(job.result_url)}"
                     data-name="${escapeHtml(job.product_name)}">View result</button>
-            <a class="text-link" href="${escapeHtml(job.result_url)}" target="_blank" rel="noopener">Open full image ↗</a>
+            <div class="result-links">
+              <a class="text-link" href="${escapeHtml(job.result_url)}" target="_blank" rel="noopener">Open full image ↗</a>
+              <button class="delete-button" type="button"
+                      data-job-id="${escapeHtml(job.id)}"
+                      data-name="${escapeHtml(job.product_name)}">Delete</button>
+            </div>
           </div>
         </div>`
       : "";
@@ -211,6 +216,11 @@
   }
 
   jobsList.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest(".delete-button");
+    if (deleteButton) {
+      deleteJob(deleteButton);
+      return;
+    }
     const button = event.target.closest(".view-result");
     if (!button) return;
     modalTitle.textContent = button.dataset.name;
@@ -219,6 +229,28 @@
     modalOpenFull.href = button.dataset.url;
     modal.showModal();
   });
+
+  async function deleteJob(button) {
+    const confirmed = window.confirm(
+      `Delete the completed job for "${button.dataset.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    button.disabled = true;
+    button.textContent = "Deleting…";
+    try {
+      const response = await fetch(`/jobs/${encodeURIComponent(button.dataset.jobId)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error(await apiError(response));
+      await loadJobs();
+    } catch (error) {
+      jobsError.textContent = error.message || "Could not delete the completed job.";
+      jobsError.hidden = false;
+      button.disabled = false;
+      button.textContent = "Delete";
+    }
+  }
 
   document.querySelector("#close-modal").addEventListener("click", () => modal.close());
   modal.addEventListener("click", (event) => {
