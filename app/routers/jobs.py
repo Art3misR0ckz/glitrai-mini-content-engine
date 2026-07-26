@@ -13,6 +13,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -20,6 +21,7 @@ from app.database import get_db
 from app.models import Job, JobStatus
 from app.schemas import JobCreated, JobResponse
 from app.services.job_service import process_job
+from app.services.image_service import validate_uploaded_image
 
 router = APIRouter(tags=["jobs"])
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
@@ -70,17 +72,29 @@ async def generate(
         )
     if not image_bytes:
         raise HTTPException(status_code=422, detail="Image file is empty")
+    try:
+        detected_mime = validate_uploaded_image(
+            image_bytes, product_image.content_type
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     job = Job(
         product_name=name,
         description=details,
         input_image=image_bytes,
-        input_image_mime=product_image.content_type,
+        input_image_mime=detected_mime,
         status=JobStatus.pending,
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+    try:
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503, detail="Unable to create the generation job"
+        ) from exc
     response = JobCreated(id=job.id, status=job.status)
     background_tasks.add_task(process_job, job.id)
     return response

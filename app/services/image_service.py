@@ -11,6 +11,35 @@ from PIL import (
     UnidentifiedImageError,
 )
 
+ALLOWED_IMAGE_FORMATS = {
+    "PNG": "image/png",
+    "JPEG": "image/jpeg",
+    "WEBP": "image/webp",
+}
+MAX_IMAGE_PIXELS = 25_000_000
+
+
+def validate_uploaded_image(image_bytes: bytes, declared_mime: str) -> str:
+    """Validate image structure and return the MIME detected by Pillow."""
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            detected_mime = ALLOWED_IMAGE_FORMATS.get(image.format or "")
+            if detected_mime is None:
+                raise ValueError("Image content must be PNG, JPEG, or WebP")
+            if image.width <= 0 or image.height <= 0:
+                raise ValueError("Image dimensions are invalid")
+            if image.width * image.height > MAX_IMAGE_PIXELS:
+                raise ValueError("Image dimensions are too large")
+            image.verify()
+    except Image.DecompressionBombError as exc:
+        raise ValueError("Image dimensions are too large") from exc
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValueError("Uploaded image is corrupted or unreadable") from exc
+
+    if detected_mime != declared_mime:
+        raise ValueError("Image contents do not match the declared file type")
+    return detected_mime
+
 
 class ImageGenerator(Protocol):
     def generate(

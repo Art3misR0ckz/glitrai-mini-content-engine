@@ -7,7 +7,7 @@ from tests.helpers import png_bytes
 def valid_form():
     return {
         "data": {"product_name": "Wooden Bowl", "description": "Hand-painted bowl"},
-        "files": {"product_image": ("bowl.png", b"small-image", "image/png")},
+        "files": {"product_image": ("bowl.png", png_bytes(), "image/png")},
     }
 
 
@@ -21,7 +21,7 @@ def test_create_and_retrieve_job(client):
     job_response = client.get(f"/jobs/{body['id']}")
     assert job_response.status_code == 200
     assert job_response.json()["product_name"] == "Wooden Bowl"
-    assert job_response.json()["result_url"] is None
+    assert job_response.json()["status"] == "completed"
 
 
 def test_jobs_are_newest_first(client):
@@ -82,7 +82,8 @@ def test_completed_lifecycle_and_result_image(client):
     assert result.content.startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_image_endpoint_rejects_unavailable_result(client):
+def test_image_endpoint_rejects_unavailable_result(client, monkeypatch):
+    monkeypatch.setattr("app.routers.jobs.process_job", lambda _job_id: None)
     response = client.post("/generate", **valid_form())
     job_id = response.json()["id"]
 
@@ -105,3 +106,27 @@ def test_generation_failure_is_recorded(client, monkeypatch):
     assert job.json()["status"] == "failed"
     assert job.json()["result_url"] is None
     assert job.json()["error_message"] == "mock generation failed"
+
+
+def test_rejects_corrupted_image(client):
+    form = valid_form()
+    form["files"] = {
+        "product_image": ("broken.png", b"not-a-real-png", "image/png")
+    }
+
+    response = client.post("/generate", **form)
+
+    assert response.status_code == 422
+    assert "corrupted or unreadable" in response.json()["detail"]
+
+
+def test_rejects_mismatched_image_type(client):
+    form = valid_form()
+    form["files"] = {
+        "product_image": ("bowl.jpg", png_bytes(), "image/jpeg")
+    }
+
+    response = client.post("/generate", **form)
+
+    assert response.status_code == 422
+    assert "do not match" in response.json()["detail"]

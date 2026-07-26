@@ -1,75 +1,167 @@
 # GlitrAI Mini Content Engine
 
-Content-generation service for the GlitrAI SDE Intern assignment. It accepts
-product details and an image, creates a photography prompt, produces a polished
-mock preview, and persists the complete asynchronous job lifecycle.
+A compact product-content workflow built for the GlitrAI SDE Intern assignment.
+The service accepts product details and a reference image, creates a commercial
+photography prompt, renders a mock preview, stores the asynchronous job in a
+database, and exposes its status and result through a responsive dashboard.
 
-## Stack
+## Technology
 
-- Python 3.12 and FastAPI
-- SQLAlchemy 2
-- PostgreSQL via psycopg
-- Pydantic Settings
-- Google Gen AI SDK with a deterministic offline fallback
-- Pillow mock image generation
+- Python 3.12, FastAPI, Jinja2, vanilla JavaScript, and CSS
+- SQLAlchemy 2 with PostgreSQL/psycopg in production
+- Google Gen AI SDK with a deterministic prompt fallback
+- Pillow for image validation and mock preview generation
 - Pytest
 
 ## Local setup
 
-1. Create and activate a Python 3.12 virtual environment.
-2. Install dependencies with `pip install -r requirements.txt`.
-3. Copy `.env.example` to `.env` and update `DATABASE_URL`.
-4. Create the configured PostgreSQL database.
-5. Start the API with `uvicorn app.main:app --reload`.
-6. Open `http://127.0.0.1:8000` for the dashboard.
+1. Install Python 3.12.
+2. Create a virtual environment:
 
-The frontend and API are served by the same FastAPI application, so no Node.js
-installation or separate frontend process is required. API documentation
-remains available at `http://127.0.0.1:8000/docs`.
+   ```bash
+   python -m venv .venv
+   ```
 
-Tables are created during application startup for this assignment foundation.
-A production service should use migrations such as Alembic.
+3. Activate it and install dependencies:
 
-## API
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- `GET /health` checks application and database availability.
-- `POST /generate` accepts `product_name`, `description`, and `product_image`
-  as multipart form data and returns a pending job with HTTP 202.
-- `GET /jobs` returns up to 100 recent jobs, newest first.
-- `GET /jobs/{id}` returns a job and its result URL when completed.
-- `GET /jobs/{id}/image` streams the completed PNG from the database.
+4. Copy `.env.example` to `.env`.
+5. For lightweight local development, set:
 
-Accepted image formats are PNG, JPEG, and WebP. Uploads are limited to 5 MB by
-default.
+   ```env
+   ENVIRONMENT=development
+   DATABASE_URL=sqlite+pysqlite:///./glitrai.db
+   ```
+
+6. Start the service:
+
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+7. Open `http://127.0.0.1:8000`. API documentation is available at `/docs`.
+
+SQLite is supported only for local development and automated tests. Production
+configuration rejects SQLite.
+
+## PostgreSQL setup
+
+Create a PostgreSQL database locally or use a managed provider, then set:
+
+```env
+DATABASE_URL=postgresql://user:password@host:5432/glitrai
+```
+
+Provider URLs beginning with either `postgres://` or `postgresql://` are
+normalized automatically to SQLAlchemy's `postgresql+psycopg://` driver URL.
+Connection liveness is checked with `pool_pre_ping`, tables are created
+idempotently during application startup, and `/health` runs `SELECT 1` against
+the configured database.
+
+## Gemini setup
+
+Create a Gemini API key and configure:
+
+```env
+GEMINI_API_KEY=your-key
+GEMINI_MODEL=gemini-2.5-flash-lite
+```
+
+When a key is configured, the prompt service calls Gemini with a bounded
+request timeout. Empty responses, timeouts, and provider failures switch to a
+deterministic commercial-photography prompt so generation remains available.
+Keys and uploaded image bytes are never returned by the API or written to logs.
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection URL in production |
+| `GEMINI_API_KEY` | Optional Gemini API credential |
+| `GEMINI_MODEL` | Gemini model; defaults to `gemini-2.5-flash-lite` |
+| `MAX_UPLOAD_MB` | Upload limit; defaults to `5` |
+| `ENVIRONMENT` | Use `production` on Render and `development` locally |
+
+## Render deployment
+
+The included `render.yaml` defines one Python web service with:
+
+```text
+Build: pip install -r requirements.txt
+Start: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Health check: /health
+```
+
+1. Push this repository to GitHub.
+2. Create a Render Blueprint from the repository.
+3. Set `DATABASE_URL` to a managed PostgreSQL connection string.
+4. Set `GEMINI_API_KEY` if Gemini prompting is desired.
+5. Deploy and verify `/`, `/health`, `/docs`, and a complete generation.
+
+Static files and templates are resolved relative to the application package, so
+they work independently of Render's process working directory.
+
+## API decisions
+
+- `POST /generate` uses multipart form data because product metadata and the
+  reference image arrive together. It returns HTTP 202 with a UUID immediately.
+- Uploaded files are capped at 5 MB and must declare PNG, JPEG, or WebP.
+  Pillow additionally verifies the actual image structure, format, dimensions,
+  and corruption state before persistence.
+- `GET /jobs` returns the 100 newest jobs for the dashboard.
+- `GET /jobs/{id}` exposes status, prompt, safe error details, and a result URL
+  only after completion.
+- `GET /jobs/{id}/image` streams stored result bytes.
+- `GET /health` checks the real database connection.
+
+## Job lifecycle
+
+```text
+pending → processing → completed
+                     ↘ failed
+```
+
+The initial insert is transaction-safe. Background processing commits explicit
+state transitions and rolls back before recording a sanitized failure.
 
 ## Frontend
 
-The responsive dashboard provides:
-
-- A product name, description, and reference-image submission form.
-- Local image preview and client-side type and size validation.
-- Clear upload, success, and error states.
-- Recent job cards refreshed every three seconds.
-- Status badges for pending, processing, completed, and failed jobs.
-- Generated prompt inspection and inline or full-size result viewing.
+The server-rendered dashboard provides local image preview, client-side
+validation, readable submission states, three-second status polling, generated
+prompt inspection, status badges, inline results, and full-image viewing. It
+requires no Node.js build or separate deployment.
 
 ### Screenshot
 
 > Add a screenshot of the deployed dashboard here before submission.
 
-<!-- Example: ![Mini Content Engine dashboard](docs/dashboard.png) -->
+<!-- ![Mini Content Engine dashboard](docs/dashboard.png) -->
 
 ## Tests
 
-Run `pytest`. Tests use an isolated in-memory SQLite database, while the
-application itself is configured for PostgreSQL.
+Run:
 
-## Generation workflow
+```bash
+pytest
+```
 
-`POST /generate` persists a pending job and schedules processing with FastAPI
-`BackgroundTasks`. Processing moves the job to `processing`, generates a prompt
-with Gemini (or the deterministic fallback), renders a 1024×1024 PNG, and marks
-the job `completed`. Errors are stored and mark the job `failed`.
+Tests use an isolated in-memory SQLite database and mock external Gemini calls.
+They cover the API, job lifecycle, result images, frontend assets, prompt
+fallback, upload validation, URL normalization, and production configuration.
 
-`BackgroundTasks` keeps this assignment compact. A production deployment should
-use a durable queue and worker so jobs survive application restarts.
+## Limitations and production tradeoffs
+
+- The current `MockImageGenerator` creates a polished composition from the
+  uploaded reference; it does not synthesize a new AI lifestyle scene. The
+  provider abstraction is intended to be replaced by ComfyUI.
+- FastAPI `BackgroundTasks` is compact but not durable. A production system
+  should use a worker queue so jobs survive restarts and can be retried.
+- Image bytes are stored in PostgreSQL to avoid ephemeral-disk loss. At scale,
+  use object storage and persist URLs instead.
+- Automatic table creation is sufficient for this assignment. Production
+  schema evolution should use Alembic migrations.
+- A production-facing service should add authentication, rate limiting,
+  idempotency keys, moderation, observability, and retention policies.

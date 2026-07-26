@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 
 from app.config import Settings, get_settings
 
@@ -18,7 +19,8 @@ class PromptService:
 
         try:
             client = self._client or genai.Client(
-                api_key=self.settings.gemini_api_key
+                api_key=self.settings.gemini_api_key,
+                http_options=types.HttpOptions(timeout=15_000),
             )
             response = client.models.generate_content(
                 model=self.settings.gemini_model,
