@@ -9,11 +9,21 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: GEMINI_API_KEY
+      - key: OPENROUTER_API_KEY
         sync: false
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash-lite
+      - key: OPENROUTER_MODEL
+        value: openrouter/free
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENROUTER_APP_NAME
+        value: GlitrAI Mini Content Engine
+      - key: OPENROUTER_TIMEOUT_SECONDS
+        value: "25"
+      - key: OPENROUTER_MAX_RETRIES
+        value: "2"
       - key: MAX_UPLOAD_MB
         value: "5"
       - key: ENVIRONMENT
         value: production
+      - key: IMAGE_PROVIDER
+        value: mock

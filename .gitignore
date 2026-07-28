@@ -2,8 +2,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.venv-*/
 venv/
 .env
+.env.*
+!.env.example
 *.db
 *.sqlite
 *.sqlite3
@@ -13,6 +16,8 @@ tmp/
 .ruff_cache/
 .mypy_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 .idea/
 .vscode/

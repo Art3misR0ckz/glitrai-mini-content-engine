@@ -11,6 +11,8 @@ from PIL import (
     UnidentifiedImageError,
 )
 
+from app.config import Settings, get_settings
+
 ALLOWED_IMAGE_FORMATS = {
     "PNG": "image/png",
     "JPEG": "image/jpeg",
@@ -88,9 +90,9 @@ class MockImageGenerator:
         draw = ImageDraw.Draw(canvas)
         label_font = self._font(22, bold=True)
         name_font = self._font(34, bold=True)
-        label_box = (44, 42, 190, 82)
+        label_box = (44, 42, 220, 82)
         draw.rounded_rectangle(label_box, radius=20, fill=(255, 255, 255, 210))
-        draw.text((61, 51), "AI Preview", fill=(38, 38, 38, 255), font=label_font)
+        draw.text((54, 51), "Mock Preview", fill=(38, 38, 38, 255), font=label_font)
 
         display_name = self._fit_text(draw, product_name, name_font, 900)
         text_box = draw.textbbox((0, 0), display_name, font=name_font)
@@ -135,3 +137,10 @@ class MockImageGenerator:
         while cleaned and draw.textlength(f"{cleaned}…", font=font) > max_width:
             cleaned = cleaned[:-1]
         return f"{cleaned.rstrip()}…"
+
+
+def get_image_generator(settings: Settings | None = None) -> ImageGenerator:
+    selected = (settings or get_settings()).image_provider
+    if selected == "mock":
+        return MockImageGenerator()
+    raise ValueError(f"Unsupported image provider: {selected}")

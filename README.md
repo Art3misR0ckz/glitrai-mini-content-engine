@@ -1,123 +1,44 @@
 # GlitrAI Mini Content Engine
 
-A compact product-content workflow built for the GlitrAI SDE Intern assignment.
-The service accepts product details and a reference image, creates a commercial
-photography prompt, renders a mock preview, stores the asynchronous job in a
-database, and exposes its status and result through a responsive dashboard.
+A publicly deployable implementation of Assignment 1 for the GlitrAI SDE
+Intern assignment. A user submits product information and a reference image;
+the application creates a tracked database job, asks OpenRouter for a commercial
+product-photography prompt, renders an assignment-approved mock preview, and
+serves the completed result through a responsive dashboard.
 
-## Technology
+**Hosted application:** [glitrai-mini-content-engine-r1gz.onrender.com](https://glitrai-mini-content-engine-r1gz.onrender.com/)
 
-- Python 3.12, FastAPI, Jinja2, vanilla JavaScript, and CSS
-- SQLAlchemy 2 with PostgreSQL/psycopg in production
-- Google Gen AI SDK with a deterministic prompt fallback
-- Pillow for image validation and mock preview generation
-- Pytest
+## Assignment requirements covered
 
-## Local setup
+- Product name, description, and validated reference-image upload
+- PostgreSQL-backed pending, processing, completed, and failed jobs
+- OpenRouter prompt generation with retry and deterministic fallback
+- Assignment-approved mock image provider returning a 1024×1024 PNG
+- Job status, provider metadata, prompt, result-image, and health APIs
+- Server-rendered frontend with preview, polling, results, and safe deletion
+- Local SQLite development and production PostgreSQL enforcement
+- Render Blueprint and Python version pin
+- Automated API, provider, migration, security, and frontend tests
 
-1. Install Python 3.12.
-2. Create a virtual environment:
+## Architecture
 
-   ```bash
-   python -m venv .venv
-   ```
-
-3. Activate it and install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Copy `.env.example` to `.env`.
-5. For lightweight local development, set:
-
-   ```env
-   ENVIRONMENT=development
-   DATABASE_URL=sqlite+pysqlite:///./glitrai.db
-   ```
-
-6. Start the service:
-
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-7. Open `http://127.0.0.1:8000`. API documentation is available at `/docs`.
-
-SQLite is supported only for local development and automated tests. Production
-configuration rejects SQLite.
-
-## PostgreSQL setup
-
-Create a PostgreSQL database locally or use a managed provider, then set:
-
-```env
-DATABASE_URL=postgresql://user:password@host:5432/glitrai
+```mermaid
+flowchart LR
+    U["Browser"] -->|"multipart POST /generate"| API["FastAPI"]
+    API -->|"pending job"| DB[("PostgreSQL")]
+    API --> BG["BackgroundTasks worker"]
+    BG -->|"product metadata"| OR["OpenRouter"]
+    OR -->|"prompt or provider failure"| BG
+    BG -->|"provider unavailable"| FB["Deterministic fallback"]
+    FB --> BG
+    BG -->|"prompt + reference"| MOCK["MockImageGenerator"]
+    MOCK -->|"1024×1024 PNG"| DB
+    U -->|"poll GET /jobs"| API
+    API -->|"status, metadata, result URL"| U
 ```
 
-Provider URLs beginning with either `postgres://` or `postgresql://` are
-normalized automatically to SQLAlchemy's `postgresql+psycopg://` driver URL.
-Connection liveness is checked with `pool_pre_ping`, tables are created
-idempotently during application startup, and `/health` runs `SELECT 1` against
-the configured database.
-
-## Gemini setup
-
-Create a Gemini API key and configure:
-
-```env
-GEMINI_API_KEY=your-key
-GEMINI_MODEL=gemini-2.5-flash-lite
-```
-
-When a key is configured, the prompt service calls Gemini with a bounded
-request timeout. Empty responses, timeouts, and provider failures switch to a
-deterministic commercial-photography prompt so generation remains available.
-Keys and uploaded image bytes are never returned by the API or written to logs.
-
-## Environment variables
-
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | PostgreSQL connection URL in production |
-| `GEMINI_API_KEY` | Optional Gemini API credential |
-| `GEMINI_MODEL` | Gemini model; defaults to `gemini-2.5-flash-lite` |
-| `MAX_UPLOAD_MB` | Upload limit; defaults to `5` |
-| `ENVIRONMENT` | Use `production` on Render and `development` locally |
-
-## Render deployment
-
-The included `render.yaml` defines one Python web service with:
-
-```text
-Build: pip install -r requirements.txt
-Start: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-Health check: /health
-```
-
-1. Push this repository to GitHub.
-2. Create a Render Blueprint from the repository.
-3. Set `DATABASE_URL` to a managed PostgreSQL connection string.
-4. Set `GEMINI_API_KEY` if Gemini prompting is desired.
-5. Deploy and verify `/`, `/health`, `/docs`, and a complete generation.
-
-Static files and templates are resolved relative to the application package, so
-they work independently of Render's process working directory.
-
-## API decisions
-
-- `POST /generate` uses multipart form data because product metadata and the
-  reference image arrive together. It returns HTTP 202 with a UUID immediately.
-- Uploaded files are capped at 5 MB and must declare PNG, JPEG, or WebP.
-  Pillow additionally verifies the actual image structure, format, dimensions,
-  and corruption state before persistence.
-- `GET /jobs` returns the 100 newest jobs for the dashboard.
-- `GET /jobs/{id}` exposes status, prompt, safe error details, and a result URL
-  only after completion.
-- `GET /jobs/{id}/image` streams stored result bytes.
-- `DELETE /jobs/{id}` permanently removes a completed job and its stored image;
-  pending, processing, and failed jobs are protected.
-- `GET /health` checks the real database connection.
+The HTTP request and background processor use separate SQLAlchemy sessions.
+The API returns HTTP 202 after the pending job is committed.
 
 ## Job lifecycle
 
@@ -126,45 +47,230 @@ pending → processing → completed
                      ↘ failed
 ```
 
-The initial insert is transaction-safe. Background processing commits explicit
-state transitions and rolls back before recording a sanitized failure.
+The worker commits `processing`, persists the prompt and provider metadata,
+renders the preview, and commits `completed`. On an unrecoverable image or
+database error it rolls back and stores a sanitized failure message.
 
-## Frontend
+## Technology choices
 
-The server-rendered dashboard provides local image preview, client-side
-validation, readable submission states, three-second status polling, generated
-prompt inspection, status badges, inline results, and full-image viewing. It
-also provides a confirmation-protected Delete action for completed jobs. It
-requires no Node.js build or separate deployment.
+- Python 3.12, FastAPI, Uvicorn
+- SQLAlchemy 2, PostgreSQL/psycopg, SQLite for local tests
+- Synchronous `httpx` client for OpenRouter
+- Pillow for content validation and mock rendering
+- Jinja2, vanilla JavaScript, and CSS
+- Pytest
 
-### Screenshot
+## OpenRouter integration
 
-> Add a screenshot of the deployed dashboard here before submission.
+`PromptService` sends a system instruction and structured product details to:
 
-<!-- ![Mini Content Engine dashboard](docs/dashboard.png) -->
-
-## Tests
-
-Run:
-
-```bash
-pytest
+```text
+POST https://openrouter.ai/api/v1/chat/completions
 ```
 
-Tests use an isolated in-memory SQLite database and mock external Gemini calls.
-They cover the API, job lifecycle, result images, frontend assets, prompt
-fallback, upload validation, URL normalization, and production configuration.
+The request preserves product identity and asks for one 80–140 word commercial
+lifestyle-photography prompt. It sends `X-OpenRouter-Title` and an optional
+`HTTP-Referer`; on Render, `RENDER_EXTERNAL_URL` supplies the referer when
+`OPENROUTER_SITE_URL` is empty.
 
-## Limitations and production tradeoffs
+Timeouts, network failures, HTTP 429, and HTTP 500/502/503/504 are retried with
+small exponential backoff. Authentication, permission, and validation failures
+are not retried. Missing keys, exhausted retries, malformed responses, empty
+content, and unavailable models use the deterministic fallback so jobs still
+complete.
 
-- The current `MockImageGenerator` creates a polished composition from the
-  uploaded reference; it does not synthesize a new AI lifestyle scene. The
-  provider abstraction is intended to be replaced by ComfyUI.
-- FastAPI `BackgroundTasks` is compact but not durable. A production system
-  should use a worker queue so jobs survive restarts and can be retried.
-- Image bytes are stored in PostgreSQL to avoid ephemeral-disk loss. At scale,
-  use object storage and persist URLs instead.
-- Automatic table creation is sufficient for this assignment. Production
-  schema evolution should use Alembic migrations.
-- A production-facing service should add authentication, rate limiting,
-  idempotency keys, moderation, observability, and retention policies.
+Safe JSON logs make the provider observable without exposing request data:
+
+```json
+{"event":"prompt_generation","provider":"openrouter","status":"success","job_id":"...","model":"..."}
+```
+
+No API keys, authorization headers, prompts, response bodies, images, or
+database URLs are logged.
+
+## Mock image provider
+
+The image step is intentionally mocked, as Assignment 1 explicitly permits.
+`MockImageGenerator` corrects EXIF orientation, creates a blurred background
+from the reference, centres the reference without distortion, adds a shadow and
+product label, and returns an in-memory PNG.
+
+It does **not** claim to synthesize a new AI lifestyle scene. The UI labels it
+“Mock Preview.” Assignment 2 can add `IMAGE_PROVIDER=comfyui` using ComfyUI
+Img2Img plus an upscaler without changing the public job API.
+
+## API
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Dashboard |
+| `POST` | `/generate` | Create a job from multipart product fields and image |
+| `GET` | `/jobs` | Return the 100 newest jobs |
+| `GET` | `/jobs/{job_id}` | Return status, prompt, provider metadata, and result URL |
+| `GET` | `/jobs/{job_id}/image` | Stream the stored result image |
+| `DELETE` | `/jobs/{job_id}` | Delete a completed job and stored image |
+| `GET` | `/health` | Check database and report safe provider configuration |
+| `GET` | `/docs` | OpenAPI documentation |
+
+`POST /generate` accepts `product_name`, `description`, and `product_image`.
+PNG, JPEG, and WebP are supported up to 5 MB. Pillow verifies actual file
+content, MIME agreement, corruption, decompression bombs, and pixel dimensions.
+
+Provider metadata returned by job endpoints:
+
+```json
+{
+  "prompt_provider": "openrouter",
+  "prompt_model": "openrouter/free",
+  "prompt_used_fallback": false,
+  "prompt_error_type": null
+}
+```
+
+Existing consumers remain compatible because these fields are additive.
+
+## Local setup
+
+1. Install Python 3.12.
+2. Create and activate a virtual environment:
+
+   ```bash
+   python -m venv .venv
+   # PowerShell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+3. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Copy `.env.example` to `.env`.
+5. Start the application:
+
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+6. Open `http://127.0.0.1:8000`.
+
+No Node.js process or separate frontend deployment is required.
+
+## Environment variables
+
+| Variable | Default / purpose |
+| --- | --- |
+| `DATABASE_URL` | `sqlite+pysqlite:///./glitrai.db` locally; PostgreSQL required in production |
+| `MAX_UPLOAD_MB` | `5` |
+| `ENVIRONMENT` | `development`; set `production` on Render |
+| `IMAGE_PROVIDER` | `mock` |
+| `OPENROUTER_API_KEY` | Optional locally; secret in Render |
+| `OPENROUTER_MODEL` | `openrouter/free` |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `OPENROUTER_APP_NAME` | `GlitrAI Mini Content Engine` |
+| `OPENROUTER_SITE_URL` | Optional explicit referer |
+| `OPENROUTER_TIMEOUT_SECONDS` | `25` |
+| `OPENROUTER_MAX_RETRIES` | `2` |
+| `RENDER_EXTERNAL_URL` | Provided automatically by Render |
+
+The API key uses Pydantic `SecretStr`, is whitespace-normalized, and is optional
+for local fallback mode.
+
+## SQLite development and PostgreSQL production
+
+Local configuration:
+
+```env
+ENVIRONMENT=development
+DATABASE_URL=sqlite+pysqlite:///./glitrai.db
+```
+
+Production configuration:
+
+```env
+ENVIRONMENT=production
+DATABASE_URL=postgresql://user:password@host/database
+```
+
+`postgres://` and `postgresql://` URLs normalize to
+`postgresql+psycopg://`. Production refuses SQLite. Connections use
+`pool_pre_ping`, and `/health` executes `SELECT 1`.
+
+Startup runs `create_all` for fresh databases and a small idempotent additive
+schema migration for existing databases. It inspects `jobs` and adds only
+missing provider-metadata columns; it never drops tables or existing rows.
+
+## Render deployment
+
+`render.yaml` defines one Python web service:
+
+```text
+Build: pip install -r requirements.txt
+Start: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Health: /health
+```
+
+Required Render variables:
+
+```env
+DATABASE_URL=<existing Neon PostgreSQL URL>
+ENVIRONMENT=production
+MAX_UPLOAD_MB=5
+IMAGE_PROVIDER=mock
+OPENROUTER_API_KEY=<set only in Render dashboard>
+OPENROUTER_MODEL=openrouter/free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_APP_NAME=GlitrAI Mini Content Engine
+OPENROUTER_TIMEOUT_SECONDS=25
+OPENROUTER_MAX_RETRIES=2
+```
+
+`OPENROUTER_SITE_URL` can be omitted because Render supplies
+`RENDER_EXTERNAL_URL`. Never place secret values in `render.yaml`.
+
+## Testing
+
+```bash
+python -m pytest -q
+python -m compileall app tests
+```
+
+The suite uses in-memory SQLite and mocked OpenRouter transports. It covers
+successful calls, headers, model capture, list content, retries, failures,
+fallback, safe logs, lifecycle, provider persistence, migrations, formats,
+corruption, MIME mismatch, size/dimension limits, static assets, and production
+configuration.
+
+## Security decisions
+
+- Secrets are excluded by `.gitignore` and represented with `SecretStr`.
+- Provider logs contain only event, provider, status, job ID, model, and safe
+  error category.
+- API errors never expose stack traces or raw provider responses.
+- Uploaded bytes are never logged and are validated before persistence.
+- User content is HTML-escaped before JavaScript inserts job cards.
+- Result files are streamed from PostgreSQL; filesystem paths are not exposed.
+- Database writes commit explicit transitions and roll back on errors.
+
+## Tradeoffs and known limitations
+
+- FastAPI `BackgroundTasks` is sufficient for this assignment but is not
+  durable across restarts. At scale use Celery, RQ, Dramatiq, or a managed task
+  service.
+- Images are stored as PostgreSQL `BYTEA` for deployment simplicity. Object
+  storage plus persisted URLs is preferable at scale.
+- Free OpenRouter models can have variable availability, latency, and limits.
+  The fallback prevents those outages from breaking the application.
+- Startup schema upgrades are intentionally small and additive. A larger
+  product should use versioned Alembic migrations.
+- Authentication, rate limiting, moderation, retention, tracing, and
+  idempotency keys are future production work.
+
+## Submission
+
+- **Public application:** https://glitrai-mini-content-engine-r1gz.onrender.com/
+- **Public repository:** https://github.com/Art3misR0ckz/glitrai-mini-content-engine
+- **Loom video:** `<add Loom URL>`
+- **Google Drive folder:** `<add submission folder URL>`
+- **Assignment 2 workflow/screenshots:** `<add ComfyUI deliverable links>`

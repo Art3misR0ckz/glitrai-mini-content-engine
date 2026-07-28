@@ -101,13 +101,27 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-height: 1.02;
 }
 
-.hero > p:last-child {
+.hero-copy {
   max-width: 630px;
   margin: 20px 0 0;
   color: var(--muted);
   font-size: 1.05rem;
   line-height: 1.65;
 }
+
+.provider-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 680px;
+  margin-top: 18px;
+  padding: 11px 13px;
+  border: 1px solid rgba(82, 97, 77, .16);
+  border-radius: 10px;
+  color: #596355;
+  background: rgba(240, 244, 237, .72);
+}
+.provider-note p { margin: 0; font-size: .76rem; line-height: 1.48; }
 
 .dashboard-grid {
   display: grid;
@@ -341,6 +355,28 @@ input.invalid, textarea.invalid, .upload-zone.invalid { border-color: var(--fail
   border-top: 1px solid #ecece8;
   padding-top: 14px;
 }
+.provider-metadata {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #586052;
+  background: #f3f5f0;
+  font-size: .72rem;
+}
+.provider-metadata strong { color: #323a30; text-align: right; }
+.fallback-warning {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  color: var(--pending);
+  background: var(--pending-bg);
+  font-size: .72rem;
+  line-height: 1.45;
+}
 .prompt summary { color: #515a4e; cursor: pointer; font-size: .76rem; font-weight: 750; }
 .prompt p { margin: 10px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.58; }
 .job-error { margin-top: 15px; padding: 12px; border-radius: 9px; color: var(--failed); background: var(--failed-bg); }
@@ -349,6 +385,13 @@ input.invalid, textarea.invalid, .upload-zone.invalid { border-color: var(--fail
 
 .job-result { margin: 18px -22px -22px; border-top: 1px solid var(--line); background: #f4f4f0; }
 .job-result > img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.image-provider-label {
+  margin: 0;
+  padding: 9px 16px 0;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+}
 .result-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; }
 .result-links { display: flex; align-items: center; gap: 15px; }
 .delete-button {

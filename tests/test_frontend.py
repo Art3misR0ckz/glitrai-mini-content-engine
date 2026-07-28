@@ -21,6 +21,9 @@ def test_static_javascript_is_accessible(client):
 
     assert response.status_code == 200
     assert "setInterval(loadJobs, 3000)" in response.text
+    assert "prompt_used_fallback" in response.text
+    assert "Deterministic fallback" in response.text
+    assert "Image provider: Mock preview" in response.text
 
 
 def test_docs_remain_accessible(client):

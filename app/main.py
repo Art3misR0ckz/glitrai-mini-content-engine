@@ -10,11 +10,13 @@ from fastapi.templating import Jinja2Templates
 from app.config import get_settings
 from app.database import Base, engine
 from app.routers import health, jobs
+from app.schema_migrations import ensure_job_provider_columns
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
+    ensure_job_provider_columns(engine)
     yield
 
 

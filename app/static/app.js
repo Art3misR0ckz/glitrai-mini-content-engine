@@ -26,6 +26,7 @@
   const modalOpenFull = document.querySelector("#modal-open-full");
   let previewUrl = null;
   let isSubmitting = false;
+  let lastJobsSignature = "";
 
   const errors = {
     product_name: document.querySelector("#product-name-error"),
@@ -167,9 +168,22 @@
     const error = job.status === "failed"
       ? `<div class="job-error"><strong>Generation failed</strong><p>${escapeHtml(job.error_message || "An unexpected error occurred.")}</p></div>`
       : "";
+    const promptSource = job.prompt_provider
+      ? `<div class="provider-metadata">
+          <span>Prompt source</span>
+          <strong>${job.prompt_used_fallback
+            ? "Deterministic fallback"
+            : `${escapeHtml(job.prompt_provider === "openrouter" ? "OpenRouter" : job.prompt_provider)} · ${escapeHtml(job.prompt_model || "model unavailable")}`
+          }</strong>
+        </div>`
+      : "";
+    const fallbackWarning = job.prompt_used_fallback
+      ? `<p class="fallback-warning">OpenRouter was unavailable, so a deterministic fallback prompt was used.</p>`
+      : "";
     const result = completed
       ? `<div class="job-result">
           <img src="${escapeHtml(job.result_url)}" alt="Generated preview for ${escapeHtml(job.product_name)}" loading="lazy">
+          <p class="image-provider-label">Image provider: Mock preview</p>
           <div class="result-actions">
             <button class="secondary-button view-result" type="button"
                     data-url="${escapeHtml(job.result_url)}"
@@ -195,7 +209,7 @@
         </span>
       </div>
       <p class="job-description">${escapeHtml(shortDescription(job.description))}</p>
-      ${prompt}${error}${result}
+      ${promptSource}${fallbackWarning}${prompt}${error}${result}
     </article>`;
   }
 
@@ -204,7 +218,11 @@
       const response = await fetch("/jobs", { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(await apiError(response));
       const jobs = await response.json();
-      jobsList.innerHTML = jobs.map(jobCard).join("");
+      const jobsSignature = JSON.stringify(jobs);
+      if (jobsSignature !== lastJobsSignature) {
+        jobsList.innerHTML = jobs.map(jobCard).join("");
+        lastJobsSignature = jobsSignature;
+      }
       jobsLoading.hidden = true;
       jobsEmpty.hidden = jobs.length !== 0;
       jobsError.hidden = true;

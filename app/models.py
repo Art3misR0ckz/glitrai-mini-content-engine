@@ -28,6 +28,10 @@ class Job(Base):
     input_image: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     input_image_mime: Mapped[str] = mapped_column(String(50), nullable=False)
     generated_prompt: Mapped[str | None] = mapped_column(Text)
+    prompt_provider: Mapped[str | None] = mapped_column(String(32))
+    prompt_model: Mapped[str | None] = mapped_column(String(255))
+    prompt_used_fallback: Mapped[bool] = mapped_column(default=False, nullable=False)
+    prompt_error_type: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status"), default=JobStatus.pending, nullable=False
     )
